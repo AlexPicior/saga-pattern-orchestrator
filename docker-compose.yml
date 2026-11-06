@@ -1,0 +1,143 @@
+services:
+  kafka:
+    image: apache/kafka:3.7.0
+    ports:
+      - "21092:21092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:21092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:21092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  orchestrator:
+    build: ./orchestrator/orchestrator
+    ports:
+      - "21081:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-orchestrator:5432/orchestratordb
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres-orchestrator:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  postgres-orchestrator:
+    image: postgres:16
+    ports:
+      - "21432:5432"
+    environment:
+      POSTGRES_DB: orchestratordb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - orchestrator-data:/var/lib/postgresql/data
+
+  inventory:
+    build: ./inventory-service/inventory
+    ports:
+      - "21082:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-inventory:5432/inventorydb
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres-inventory:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  postgres-inventory:
+    image: postgres:16
+    ports:
+      - "21433:5432"
+    environment:
+      POSTGRES_DB: inventorydb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - inventory-data:/var/lib/postgresql/data
+
+  payment:
+    build: ./payment-service/payment
+    ports:
+      - "21083:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-payment:5432/paymentdb
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres-payment:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  postgres-payment:
+    image: postgres:16
+    ports:
+      - "21434:5432"
+    environment:
+      POSTGRES_DB: paymentdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - payment-data:/var/lib/postgresql/data
+
+  shipping:
+    build: ./shipping-service/shipping
+    ports:
+      - "21084:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-shipping:5432/shippingdb
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      postgres-shipping:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  postgres-shipping:
+    image: postgres:16
+    ports:
+      - "21435:5432"
+    environment:
+      POSTGRES_DB: shippingdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - shipping-data:/var/lib/postgresql/data
+
+volumes:
+  orchestrator-data:
+  inventory-data:
+  payment-data:
+  shipping-data:
